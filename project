@@ -1,0 +1,131 @@
+import cv2
+import os
+from tkinter import Tk, Label, Button, Entry, StringVar, filedialog, messagebox, simpledialog
+
+class SteganographyApp:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("Steganography App")
+
+        # Initialize variables
+        self.message_var = StringVar()
+        self.password_var = StringVar()
+        self.image_path = None  # Variable to store the selected image path
+
+        # Create labels and entry widgets
+        Label(root, text="Enter secret message:").pack()
+        self.message_entry = Entry(root, textvariable=self.message_var)
+        self.message_entry.pack()
+
+        Label(root, text="Enter password:").pack()
+        self.password_entry = Entry(root, show="*", textvariable=self.password_var)
+        self.password_entry.pack()
+
+        # Create buttons
+        Button(root, text="Select Image", command=self.select_image).pack()
+        Button(root, text="Encrypt", command=self.encrypt).pack()
+        Button(root, text="Decrypt", command=self.decrypt).pack()
+
+    def select_image(self):
+        self.image_path = filedialog.askopenfilename(title="Select Image", filetypes=[("Image files", "*.png;*.jpg;*.jpeg")])
+        if not self.image_path:
+            messagebox.showwarning("Warning", "No image selected.")
+        else:
+            messagebox.showinfo("Info", f"Selected image: {self.image_path}")
+
+    def encrypt(self):
+        if not self.image_path:
+            messagebox.showerror("Error", "Please select an image.")
+            return
+
+        message = self.message_var.get()
+        password = self.password_var.get()
+
+        if not message or not password:
+            messagebox.showerror("Error", "Please enter both message and password.")
+            return
+
+        img = cv2.imread(self.image_path)
+
+        if img is None:
+            messagebox.showerror("Error", "Unable to load the image. Please check the file path.")
+            return
+
+        encrypted_img = self.hide_text_in_image(img, message)
+
+        cv2.imwrite("Encryptedmsg.png", encrypted_img)
+        messagebox.showinfo("Success", "Encryption completed.")
+        os.system("start Encryptedmsg.png")
+
+    def decrypt(self):
+        if not self.image_path:
+            messagebox.showerror("Error", "Please select an image.")
+            return
+
+        encrypted_image_path = "Encryptedmsg.png"
+        if not os.path.exists(encrypted_image_path):
+            messagebox.showerror("Error", "Encrypted image not found. Please encrypt first.")
+            return
+
+        password = self.password_var.get()
+
+        if not password:
+            messagebox.showerror("Error", "Please enter the password for decryption.")
+            return
+
+        img = cv2.imread(encrypted_image_path)
+
+        if img is None:
+            messagebox.showerror("Error", "Unable to load the image. Please check the file path.")
+            return
+
+        decrypted_message = self.retrieve_text_from_image(img)
+
+        entered_password = self.get_password()
+
+        if password == entered_password:
+            print("Decryption message:\n", decrypted_message)
+            messagebox.showinfo("Decrypted Message", f"Decryption message:\n{decrypted_message}")
+        else:
+            messagebox.showerror("Error", "Invalid key.")
+
+    def hide_text_in_image(self, img, text):
+        binary_text = ''.join(format(ord(char), '08b') for char in text)
+        binary_text += '1111111111111110'  # Add a delimiter to mark the end of the message
+
+        data_index = 0
+
+        for i in range(img.shape[0]):
+            for j in range(img.shape[1]):
+                for k in range(img.shape[2]):
+                    if data_index < len(binary_text):
+                        img[i, j, k] = int(format(img[i, j, k], '08b')[:-1] + binary_text[data_index], 2)
+                        data_index += 1
+                    else:
+                        break
+                if data_index >= len(binary_text):
+                    break
+
+        return img
+
+    def retrieve_text_from_image(self, img):
+        binary_data = ''
+        for i in range(img.shape[0]):
+            for j in range(img.shape[1]):
+                for k in range(img.shape[2]):
+                    binary_data += format(img[i, j, k], '08b')[-1]
+                    if len(binary_data) >= 16 and binary_data[-16:] == '1111111111111110':
+                        # Check for the delimiter
+                        binary_data = binary_data[:-16]  # Remove the delimiter
+                        split_binary = [binary_data[i:i + 8] for i in range(0, len(binary_data), 8)]
+                        message = ''.join([chr(int(char, 2)) for char in split_binary])
+                        return message
+        return ""
+
+    def get_password(self):
+        return simpledialog.askstring("Password", "Enter password for decryption", show="*")
+
+if __name__ == "__main__":
+    root = Tk()
+    app = SteganographyApp(root)
+    root.mainloop()
